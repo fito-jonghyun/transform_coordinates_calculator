@@ -31,10 +31,10 @@ class TransformCalculator:
 
         self.cap.set(cv2.CAP_PROP_FPS, self.start)
         while self.cap.isOpened() and self.cap.get(cv2.CAP_PROP_POS_FRAMES) <= self.end:
-            self.frame_index = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
+            self.frame_index = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             ret, self.frame = self.cap.read()
-            self.frame = cv2.putText(self.frame, f"FRAME: {self.frame_index}", (30, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                                     30, (0, 0, 0), 2, cv2.LINE_AA)
+            self.frame = cv2.putText(self.frame, f"FRAME: {self.frame_index}", (100, 100), cv2.FONT_HERSHEY_SIMPLEX,
+                                     2, (0, 0, 0), 3, cv2.LINE_AA)
 
             cv2.imshow('frame', self.frame)
             cv2.setMouseCallback('frame', self.mouse_event_handler)
@@ -44,6 +44,7 @@ class TransformCalculator:
                 self.save_results(is_finished=False)
                 cv2.destroyAllWindows()
                 self.cap.release()
+                break
 
             if k == ord('n'):
                 self.frame_indexes.append(self.frame_index)
@@ -56,9 +57,10 @@ class TransformCalculator:
 
                 self.move_next_frame()
 
-        self.save_results(is_finished=True)
-        cv2.destroyAllWindows()
-        self.cap.release()
+        if self.frame_index == self.TOTAL_LENGTH:
+            self.save_results(is_finished=True)
+            cv2.destroyAllWindows()
+            self.cap.release()
 
     def mouse_event_handler(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONUP:
@@ -74,6 +76,7 @@ class TransformCalculator:
     def move_next_frame(self):
         self.frame_number = self.cap.set(cv2.CAP_PROP_POS_FRAMES)
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.frame_number + self.step_size)
+        self.frame_index = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
         ret, self.frame = self.cap.read()
 
     def get_world_coord(self):
@@ -85,7 +88,9 @@ class TransformCalculator:
         label = tk.Label(root, text='World coord ID')
         label.pack()
 
-        element = tk.Entry(root, textvariable=ID, width=20, fg="blue", bd=3, selectbackground='violet').pack()
+        element = tk.Entry(root, textvariable=ID, width=20, fg="blue", bd=3, selectbackground='violet')
+        element.pack()
+        element.focus()
         button = tk.Button(root, text="Save & Quit", fg='White', bg='dark green', height=1, width=10,
                            command=root.destroy).pack()
         root.mainloop()
@@ -98,10 +103,43 @@ class TransformCalculator:
             "102": np.array([0, self.width / 2]),
             "103": np.array([0, self.width]),
 
-            # "201":
-            # "202":
-            # "203":
+            "201": np.array([0,     self.height / 2 - 20.16]),
+            "202": np.array([16.5,  self.height / 2 - 20.16]),
+            "203": np.array([0,     self.height / 2 - 9.16]),
+            "204": np.array([5.5,   self.height / 2 - 9.16]),
+            "205": np.array([16.5,  self.height / 2 - 7.01]),
+            "206": np.array([0,     self.height / 2 - 3.66]),
+            "207": np.array([11,    self.height / 2]),
+            "208": np.array([0,     self.height / 2 + 3.16]),
+            "209": np.array([0,     self.height / 2 + 9.16]),
+            "210": np.array([5.5,   self.height / 2 + 9.16]),
+            "211": np.array([16.5,  self.height / 2 + 7.01]),
+            "212": np.array([0,     self.height / 2 + 20.16]),
+            "213": np.array([16.5,  self.height / 2 + 20.16]),
 
+            "301": np.array([self.width / 2,        self.height / 2 - 9.15]),
+            "302": np.array([self.width / 2 - 9.15, self.height / 2]),
+            "303": np.array([self.width / 2,        self.height / 2]),
+            "304": np.array([self.width / 2 + 9.15, self.height / 2]),
+            "305": np.array([self.width / 2,        self.height / 2 + 9.15]),
+
+            "401": np.array([self.width - 16.5,     self.height / 2 - 20.16]),
+            "402": np.array([self.width,            self.height / 2 - 9.16]),
+            "403": np.array([self.width - 16.5,     self.height / 2 - 7.01]),
+            "404": np.array([self.width - 5.5,      self.height / 2 - 9.16]),
+            "405": np.array([self.width,            self.height / 2 - 9.16]),
+            "406": np.array([self.width,            self.height / 2 - 3.66]),
+            "407": np.array([self.width - 11,       self.height / 2]),
+            "408": np.array([self.width,            self.height / 2 + 3.66]),
+            "409": np.array([self.width - 16.5,     self.height / 2 + 7.01]),
+            "410": np.array([self.width - 5.5,      self.height / 2 + 9.16]),
+            "411": np.array([self.width,            self.height / 2 + 9.16]),
+            "412": np.array([self.width - 16.5,     self.height / 2 + 20.16]),
+            "413": np.array([self.width,            self.height / 2 + 20.16]),
+
+            "501": np.array([0,                 self.height]),
+            "502": np.array([self.width / 2,    self.height]),
+            "503": np.array([self.width,        self.height]),
         }
 
     def transform_world_ID_to_coord(self):
