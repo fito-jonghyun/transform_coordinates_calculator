@@ -14,9 +14,12 @@ class TransformCalculator:
         self.end   = args.end
         self.width = args.width
         self.height = args.height
+        self.grid_number = args.grid_number
         self.step_size = 25
 
-        self.define_world_ID_coords()
+        self.is_finished = True
+
+        self.define_world_coord_dict()
 
         self.pixel_coord = []
         self.world_coord_ID = []
@@ -39,26 +42,34 @@ class TransformCalculator:
             cv2.imshow('frame', self.frame)
             cv2.setMouseCallback('frame', self.mouse_event_handler)
 
-            k = cv2.waitKey()
+            k = cv2.waitKey(0) & 0xFF
+
             if k == ord('q'):
-                self.save_results(is_finished=False)
-                cv2.destroyAllWindows()
-                self.cap.release()
+                self.is_finished = False
                 break
+            elif k == ord('r'):
+                self.remove_last_coord()
 
             if k == ord('n'):
                 self.frame_indexes.append(self.frame_index)
+                self.transform_world_ID_to_coord()
+
+                print(f"pixel coord: {self.pixel_coord} world coord: {self.world_coord}")
+
                 h_mat = cv2.findHomography(np.array(self.pixel_coord), np.array(self.world_coord), cv2.RANSAC, 5.0)
-                self.h_mat.append(h_mat)
+                # print(f"homography matrix: {h_mat}")
+
+                self.h_mat.append(h_mat[0])
 
                 self.pixel_coord = []
                 self.world_coord = []
                 self.world_coord_ID = []
 
                 self.move_next_frame()
+                self.condition_fullfillment = False
 
-        if self.frame_index == self.TOTAL_LENGTH:
-            self.save_results(is_finished=True)
+        if not self.cap.isOpened():
+            self.save_results(is_finished=self.is_finished)
             cv2.destroyAllWindows()
             self.cap.release()
 
@@ -68,13 +79,27 @@ class TransformCalculator:
             self.draw_circle()
             cv2.imshow("frame", self.frame)
             world_coord_id = self.get_world_coord()
-            self.world_coord.append(world_coord_id)
+            self.world_coord_ID.append(world_coord_id)
 
     def draw_circle(self):
         self.frame = cv2.circle(self.frame, (self.pixel_coord[-1][0], self.pixel_coord[-1][1]), 4, (0, 0, 255), 2)
 
+    def remove_last_coord(self):
+        if self.pixel_coord:
+            self.draw_x_mark()
+
+            self.pixel_coord.pop()
+            self.world_coord_ID.pop()
+
+            cv2.imshow("frame", self.frame)
+
+    def draw_x_mark(self):
+        self.frame = cv2.putText(self.frame, "X", (self.pixel_coord[-1][0], self.pixel_coord[-1][1]),
+                                 cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.LINE_AA)
+
+
     def move_next_frame(self):
-        self.frame_number = self.cap.set(cv2.CAP_PROP_POS_FRAMES)
+        self.frame_number = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.frame_number + self.step_size)
         self.frame_index = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
         ret, self.frame = self.cap.read()
@@ -95,61 +120,77 @@ class TransformCalculator:
                            command=root.destroy).pack()
         root.mainloop()
 
-        return ID.get()
+        return str(ID.get())
 
-    def define_world_ID_coords(self):
+    def define_world_coord_dict(self):
         self.world_coord_dict = {
-            "101": np.array([0, 0]),
-            "102": np.array([0, self.width / 2]),
-            "103": np.array([0, self.width]),
+            "110": [0, 0],
+            "120": [0, self.width / 2],
+            "130": [0, self.width],
 
-            "201": np.array([0,     self.height / 2 - 20.16]),
-            "202": np.array([16.5,  self.height / 2 - 20.16]),
-            "203": np.array([0,     self.height / 2 - 9.16]),
-            "204": np.array([5.5,   self.height / 2 - 9.16]),
-            "205": np.array([16.5,  self.height / 2 - 7.01]),
-            "206": np.array([0,     self.height / 2 - 3.66]),
-            "207": np.array([11,    self.height / 2]),
-            "208": np.array([0,     self.height / 2 + 3.16]),
-            "209": np.array([0,     self.height / 2 + 9.16]),
-            "210": np.array([5.5,   self.height / 2 + 9.16]),
-            "211": np.array([16.5,  self.height / 2 + 7.01]),
-            "212": np.array([0,     self.height / 2 + 20.16]),
-            "213": np.array([16.5,  self.height / 2 + 20.16]),
+            "201": [0, self.height / 2 - 20.16],
+            "202": [16.5, self.height / 2 - 20.16],
+            "203": [0, self.height / 2 - 9.16],
+            "204": [5.5, self.height / 2 - 9.16],
+            "205": [16.5, self.height / 2 - 7.01],
+            "206": [0, self.height / 2 - 3.66],
+            "207": [11, self.height / 2],
+            "208": [0, self.height / 2 + 3.16],
+            "209": [0, self.height / 2 + 9.16],
+            "210": [5.5, self.height / 2 + 9.16],
+            "211": [16.5, self.height / 2 + 7.01],
+            "212": [0, self.height / 2 + 20.16],
+            "213": [16.5, self.height / 2 + 20.16],
 
-            "301": np.array([self.width / 2,        self.height / 2 - 9.15]),
-            "302": np.array([self.width / 2 - 9.15, self.height / 2]),
-            "303": np.array([self.width / 2,        self.height / 2]),
-            "304": np.array([self.width / 2 + 9.15, self.height / 2]),
-            "305": np.array([self.width / 2,        self.height / 2 + 9.15]),
+            "301": [self.width / 2, self.height / 2 - 9.15],
+            "302": [self.width / 2 - 9.15, self.height / 2],
+            "303": [self.width / 2, self.height / 2],
+            "304": [self.width / 2 + 9.15, self.height / 2],
+            "305": [self.width / 2, self.height / 2 + 9.15],
 
-            "401": np.array([self.width - 16.5,     self.height / 2 - 20.16]),
-            "402": np.array([self.width,            self.height / 2 - 9.16]),
-            "403": np.array([self.width - 16.5,     self.height / 2 - 7.01]),
-            "404": np.array([self.width - 5.5,      self.height / 2 - 9.16]),
-            "405": np.array([self.width,            self.height / 2 - 9.16]),
-            "406": np.array([self.width,            self.height / 2 - 3.66]),
-            "407": np.array([self.width - 11,       self.height / 2]),
-            "408": np.array([self.width,            self.height / 2 + 3.66]),
-            "409": np.array([self.width - 16.5,     self.height / 2 + 7.01]),
-            "410": np.array([self.width - 5.5,      self.height / 2 + 9.16]),
-            "411": np.array([self.width,            self.height / 2 + 9.16]),
-            "412": np.array([self.width - 16.5,     self.height / 2 + 20.16]),
-            "413": np.array([self.width,            self.height / 2 + 20.16]),
+            "401": [self.width - 16.5, self.height / 2 - 20.16],
+            "402": [self.width, self.height / 2 - 9.16],
+            "403": [self.width - 16.5, self.height / 2 - 7.01],
+            "404": [self.width - 5.5, self.height / 2 - 9.16],
+            "405": [self.width, self.height / 2 - 9.16],
+            "406": [self.width, self.height / 2 - 3.66],
+            "407": [self.width - 11, self.height / 2],
+            "408": [self.width, self.height / 2 + 3.66],
+            "409": [self.width - 16.5, self.height / 2 + 7.01],
+            "410": [self.width - 5.5, self.height / 2 + 9.16],
+            "411": [self.width, self.height / 2 + 9.16],
+            "412": [self.width - 16.5, self.height / 2 + 20.16],
+            "413": [self.width, self.height / 2 + 20.16],
 
-            "501": np.array([0,                 self.height]),
-            "502": np.array([self.width / 2,    self.height]),
-            "503": np.array([self.width,        self.height]),
+            "510": [0, self.height],
+            "520": [self.width / 2, self.height],
+            "530": [self.width, self.height],
         }
 
+        header_list = [110, 120, 510, 520]
+        splited_width = self.width / 2 / self.grid_number
+
+        for i in range(self.grid_number - 1):
+            for j in range(4):
+                if j == 0:
+                    self.world_coord_dict[str(header_list[j] + i + 1)] = [splited_width * i + 1, 0]
+                elif j == 1:
+                    self.world_coord_dict[str(header_list[j] + i + 1)] = [self.width / 2 + splited_width * i + 1, 0]
+                elif j == 2:
+                    self.world_coord_dict[str(header_list[j] + i + 1)] = [splited_width * i + 1, self.height]
+                elif j == 3:
+                    self.world_coord_dict[str(header_list[j] + i + 1)] = [self.width / 2 + splited_width * i + 1, self.height]
+        # print(self.world_coord_dict)
+
     def transform_world_ID_to_coord(self):
-        pass
+        for ID in self.world_coord_ID:
+            self.world_coord.append(self.world_coord_dict[ID])
 
     def save_results(self, is_finished):
         if is_finished:
-            fname = f'Transform_mat_{self.start}-{self.end}.mat'
+            fname = f'transform_mat_{self.start}-{self.end}.mat'
         else:
-            fname = f'Transform_mat_{self.start}-{self.frame_index}.mat'
+            fname = f'transform_mat_{self.start}-{self.frame_index}.mat'
 
         sio.savemat(fname, {"frame_index": self.frame_indexes, "h_mat": self.h_mat})
 
@@ -169,6 +210,8 @@ if __name__ == "__main__":
                         default=105, help='stadium width')
     parser.add_argument('--height', type=int, required=True,
                         default=68, help='stadium height')
+    parser.add_argument('--grid-number', type=int, required=True,
+                        default=10, help='the number of grass line in each half / TIP: count single side')
 
     args = parser.parse_args()
 
