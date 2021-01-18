@@ -82,13 +82,17 @@ class TransformCalculator:
 
         self.world_coords_array = []
         self.pixel_coords_array = []
-        for key in self.pixel_coord_list[last_index].keys():
-            self.pixel_coords_array.append(self.pixel_coord_list[last_index][key])
-            self.world_coords_array.append((self.world_coord_dict[key][0] / self.width * self.template.shape[1],
-                                            self.world_coord_dict[key][1] / self.height * self.template.shape[0]))
 
-        self.last_homography, _ = cv2.findHomography(np.array(self.world_coords_array),
-                                                        np.array(self.pixel_coords_array), cv2.RANSAC, 5.0)
+        if len(self.pixel_coord_list[last_index].keys()) >= 4:
+            for key in self.pixel_coord_list[last_index].keys():
+                self.pixel_coords_array.append(self.pixel_coord_list[last_index][key])
+                self.world_coords_array.append((self.world_coord_dict[key][0] / self.width * self.template.shape[1],
+                                                self.world_coord_dict[key][1] / self.height * self.template.shape[0]))
+
+            self.last_homography, _ = cv2.findHomography(np.array(self.world_coords_array),
+                                                            np.array(self.pixel_coords_array), cv2.RANSAC, 5.0)
+
+
 
         if next_index == -1:
             self.next_homography = self.last_homography
@@ -96,14 +100,16 @@ class TransformCalculator:
         else:
             self.world_coords_array = []
             self.pixel_coords_array = []
-            for key in self.pixel_coord_list[next_index].keys():
-                self.pixel_coords_array.append(self.pixel_coord_list[next_index][key])
-                self.world_coords_array.append((self.world_coord_dict[key][0] / self.width * self.template.shape[1],
-                                                self.world_coord_dict[key][1] / self.height * self.template.shape[0]))
+            if len(self.pixel_coord_list[next_index].keys()) >= 4:
+                for key in self.pixel_coord_list[next_index].keys():
+                    self.pixel_coords_array.append(self.pixel_coord_list[next_index][key])
+                    self.world_coords_array.append((self.world_coord_dict[key][0] / self.width * self.template.shape[1],
+                                                    self.world_coord_dict[key][1] / self.height * self.template.shape[0]))
 
-            self.next_homography, _ = cv2.findHomography(np.array(self.world_coords_array),
-                                                         np.array(self.pixel_coords_array), cv2.RANSAC, 5.0)
-
+                self.next_homography, _ = cv2.findHomography(np.array(self.world_coords_array),
+                                                             np.array(self.pixel_coords_array), cv2.RANSAC, 5.0)
+            else:
+                self.next_homography = self.last_homography
 
 
         for index in range(last_index, next_index):
@@ -122,6 +128,7 @@ class TransformCalculator:
 
 
         for index in range(last_index, next_index):
+            print(index, "th Homography updated")
             self.homographies[index], _ = cv2.findHomography(np.array([self.world_coord_dict[key] for key in self.world_coord_dict.keys()]),
                                np.array([self.estimated_pixel_coords[index][key] for key in self.estimated_pixel_coords[index].keys()]),
                                cv2.RANSAC, 5.0)
@@ -135,6 +142,9 @@ class TransformCalculator:
         self.TOTAL_LENGTH = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
         print(f"Video File Length: {self.TOTAL_LENGTH}\nSelected index: {self.start} ~ {self.end}")
         self.load_results()
+
+        for stored_index in self.pixel_coord_list.keys():
+            self.interpolate_pixel_coords(stored_index)
 
         self.cap.set(cv2.CAP_PROP_FPS, self.start)
         while self.cap.isOpened() and self.cap.get(cv2.CAP_PROP_POS_FRAMES) <= self.end:
@@ -224,7 +234,28 @@ class TransformCalculator:
                     elif k == ord('b'):
                         self.move_next_frame(-5)
                         break
-                    elif k == ord('n') and len(self.pixel_coord) >= 4:
+                    elif k == ord('j'):
+                        frame_num_str = self.get_frame_num()
+                        self.move_frame(int(frame_num_str))
+                        break
+                    elif k == ord('d'):
+                        remove_list = self.get_world_coord()
+                        remove_list = remove_list.split(", ")
+                        for remove_key in remove_list:
+                            del self.pixel_coord_list[self.frame_index][remove_key]
+
+                        print("The following key points are removed:", remove_list)
+
+                        self.world_coords_array = []
+                        self.pixel_coords_array = []
+                        for key in self.pixel_coord_list[self.frame_index].keys():
+                            self.pixel_coords_array.append(self.pixel_coord_list[self.frame_index][key])
+                            self.world_coords_array.append((self.world_coord_dict[key][0] / self.width * self.template.shape[1], self.world_coord_dict[key][1]  / self.height * self.template.shape[0]))
+
+                        self.current_homography, _ = cv2.findHomography(np.array(self.world_coords_array),
+                                                                        np.array(self.pixel_coords_array), cv2.RANSAC, 5.0)
+                        break
+                    elif k == ord('n') and (len(self.pixel_coord) >= 4 or len(self.pixel_coord_list[self.frame_index].keys()) >= 4):
                         self.frame_indexes.append(self.frame_index)
                         self.transform_world_ID_to_coord()
 
@@ -245,11 +276,12 @@ class TransformCalculator:
 
                         self.h_mat.append(self.current_homography)
 
-                        self.pixel_coord_list[self.frame_index] = copy.deepcopy(self.pixel_coord)
+                        if self.pixel_coord is not None:
+                            self.pixel_coord_list[self.frame_index] = copy.deepcopy(self.pixel_coord)
 
                         self.save_results(is_finished=False)
 
-                        # self.pixel_coord = []
+                        self.pixel_coord = {}
                         # self.world_coord = []
                         # self.world_coord_ID = []
 
@@ -263,7 +295,7 @@ class TransformCalculator:
                 self.cap.release()
             # except:
             #    self.save_results(is_finished=False)
-            #    print("ERROR!")
+            #    print("ERROR!")nnn
 
     def draw_pitch(self, img, width, height):
         color = (0, 0, 255)
@@ -332,6 +364,11 @@ class TransformCalculator:
         self.frame_index = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
         ret, self.frame = self.cap.read()
 
+    def move_frame(self, dest_frame_num):
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, dest_frame_num)
+        self.frame_index = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
+        ret, self.frame = self.cap.read()
+
     def get_world_coord(self):
         root = tk.Tk()
         root.geometry("500x150")
@@ -339,6 +376,24 @@ class TransformCalculator:
 
         ID = tk.StringVar(root)
         label = tk.Label(root, text='World coord ID')
+        label.pack()
+
+        element = tk.Entry(root, textvariable=ID, width=20, fg="blue", bd=3, selectbackground='violet')
+        element.pack()
+        element.focus()
+        button = tk.Button(root, text="Save & Quit", fg='White', bg='dark green', height=1, width=10,
+                           command=root.destroy).pack()
+        root.mainloop()
+
+        return str(ID.get())
+
+    def get_frame_num(self):
+        root = tk.Tk()
+        root.geometry("500x150")
+        root.title('Frame num')
+
+        ID = tk.StringVar(root)
+        label = tk.Label(root, text='Frame num')
         label.pack()
 
         element = tk.Entry(root, textvariable=ID, width=20, fg="blue", bd=3, selectbackground='violet')
