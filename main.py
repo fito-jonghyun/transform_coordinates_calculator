@@ -67,7 +67,7 @@ class TransformCalculator:
         print("Saved result loaded!")
 
     def interpolate_pixel_coords(self, current_index):
-        saved_index_list = self.pixel_coord_list.keys()
+        saved_index_list = sorted(self.pixel_coord_list.keys())
 
         last_index = 0
         next_index = -1
@@ -128,7 +128,7 @@ class TransformCalculator:
 
 
         for index in range(last_index, next_index):
-            print(index, "th Homography updated")
+            # print(index, "th Homography updated")
             self.homographies[index], _ = cv2.findHomography(np.array([self.world_coord_dict[key] for key in self.world_coord_dict.keys()]),
                                np.array([self.estimated_pixel_coords[index][key] for key in self.estimated_pixel_coords[index].keys()]),
                                cv2.RANSAC, 5.0)
@@ -143,12 +143,17 @@ class TransformCalculator:
         print(f"Video File Length: {self.TOTAL_LENGTH}\nSelected index: {self.start} ~ {self.end}")
         self.load_results()
 
-        for stored_index in self.pixel_coord_list.keys():
+        for stored_index in sorted(self.pixel_coord_list.keys()):
             self.interpolate_pixel_coords(stored_index)
 
         self.cap.set(cv2.CAP_PROP_FPS, self.start)
         while self.cap.isOpened() and self.cap.get(cv2.CAP_PROP_POS_FRAMES) <= self.end:
-            # try:
+
+            if self.cap.get(cv2.CAP_PROP_POS_FRAMES) == self.TOTAL_LENGTH - 1:
+                with open("h_mat.pickle", 'wb') as f:
+                    pickle.dump(self.homographies, f)
+                break
+
             self.frame_index = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             # if self.frame_index < self.frame_indexes[-1]:
             #    self.frame_index = self.frame_indexes[-1]
@@ -222,80 +227,86 @@ class TransformCalculator:
                 self.frame_indexes.append(self.frame_index)
                 self.h_mat.append(self.h_mat[-1])
                 self.move_next_frame(0)
+            elif k == ord('j'):
+                frame_num_str = self.get_frame_num()
+                self.move_frame(int(frame_num_str))
+            elif k == ord('b'):
+                self.move_next_frame(-3)
 
             if self.is_editing:
                 while True:
                     cv2.setMouseCallback('frame', self.mouse_event_handler)
                     k = cv2.waitKey()
+                    try:
+                        if k == ord('q'):
+                            self.is_finished = False
+                            break
+                        elif k == ord('b'):
+                            self.move_next_frame(-5)
+                            break
+                        elif k == ord('j'):
+                            frame_num_str = self.get_frame_num()
+                            self.move_frame(int(frame_num_str))
+                            break
+                        elif k == ord('d'):
+                            remove_list = self.get_world_coord()
+                            remove_list = remove_list.split(", ")
+                            for remove_key in remove_list:
+                                del self.pixel_coord_list[self.frame_index][remove_key]
 
-                    if k == ord('q'):
-                        self.is_finished = False
-                        break
-                    elif k == ord('b'):
-                        self.move_next_frame(-5)
-                        break
-                    elif k == ord('j'):
-                        frame_num_str = self.get_frame_num()
-                        self.move_frame(int(frame_num_str))
-                        break
-                    elif k == ord('d'):
-                        remove_list = self.get_world_coord()
-                        remove_list = remove_list.split(", ")
-                        for remove_key in remove_list:
-                            del self.pixel_coord_list[self.frame_index][remove_key]
+                            print("The following key points are removed:", remove_list)
 
-                        print("The following key points are removed:", remove_list)
+                            self.world_coords_array = []
+                            self.pixel_coords_array = []
+                            for key in self.pixel_coord_list[self.frame_index].keys():
+                                self.pixel_coords_array.append(self.pixel_coord_list[self.frame_index][key])
+                                self.world_coords_array.append((self.world_coord_dict[key][0] / self.width * self.template.shape[1], self.world_coord_dict[key][1]  / self.height * self.template.shape[0]))
 
-                        self.world_coords_array = []
-                        self.pixel_coords_array = []
-                        for key in self.pixel_coord_list[self.frame_index].keys():
-                            self.pixel_coords_array.append(self.pixel_coord_list[self.frame_index][key])
-                            self.world_coords_array.append((self.world_coord_dict[key][0] / self.width * self.template.shape[1], self.world_coord_dict[key][1]  / self.height * self.template.shape[0]))
+                            self.current_homography, _ = cv2.findHomography(np.array(self.world_coords_array),
+                                                                            np.array(self.pixel_coords_array), cv2.RANSAC, 5.0)
+                            break
+                        elif k == ord('n') and (len(self.pixel_coord) >= 4 or len(self.pixel_coord_list[self.frame_index].keys()) >= 4):
+                            self.frame_indexes.append(self.frame_index)
+                            self.transform_world_ID_to_coord()
 
-                        self.current_homography, _ = cv2.findHomography(np.array(self.world_coords_array),
-                                                                        np.array(self.pixel_coords_array), cv2.RANSAC, 5.0)
-                        break
-                    elif k == ord('n') and (len(self.pixel_coord) >= 4 or len(self.pixel_coord_list[self.frame_index].keys()) >= 4):
-                        self.frame_indexes.append(self.frame_index)
-                        self.transform_world_ID_to_coord()
+                            print(f"pixel coord: {self.pixel_coord}")
 
-                        print(f"pixel coord: {self.pixel_coord}")
-
-                        self.world_coords_array = []
-                        self.pixel_coords_array = []
-                        for key in self.pixel_coord.keys():
-                            self.pixel_coords_array.append(self.pixel_coord[key])
-                            self.world_coords_array.append((self.world_coord_dict[key][0] / self.width * self.template.shape[1], self.world_coord_dict[key][1]  / self.height * self.template.shape[0]))
+                            self.world_coords_array = []
+                            self.pixel_coords_array = []
+                            for key in self.pixel_coord.keys():
+                                self.pixel_coords_array.append(self.pixel_coord[key])
+                                self.world_coords_array.append((self.world_coord_dict[key][0] / self.width * self.template.shape[1], self.world_coord_dict[key][1]  / self.height * self.template.shape[0]))
 
 
-                        self.current_homography, _ = cv2.findHomography(np.array(self.world_coords_array),
-                                                                        np.array(self.pixel_coords_array), cv2.RANSAC, 5.0)
-                        h_mat, _ = cv2.findHomography(np.array(self.pixel_coords_array), np.array(self.world_coords_array),
-                                                      cv2.RANSAC, 5.0)
-                        # print(f"homography matrix: {h_mat}")
+                            self.current_homography, _ = cv2.findHomography(np.array(self.world_coords_array),
+                                                                            np.array(self.pixel_coords_array), cv2.RANSAC, 5.0)
+                            h_mat, _ = cv2.findHomography(np.array(self.pixel_coords_array), np.array(self.world_coords_array),
+                                                          cv2.RANSAC, 5.0)
+                            # print(f"homography matrix: {h_mat}")
 
-                        self.h_mat.append(self.current_homography)
+                            self.h_mat.append(self.current_homography)
 
-                        if self.pixel_coord is not None:
-                            self.pixel_coord_list[self.frame_index] = copy.deepcopy(self.pixel_coord)
+                            if self.pixel_coord is not None:
+                                self.pixel_coord_list[self.frame_index] = copy.deepcopy(self.pixel_coord)
 
-                        self.save_results(is_finished=False)
+                            self.save_results(is_finished=False)
 
-                        self.pixel_coord = {}
-                        # self.world_coord = []
-                        # self.world_coord_ID = []
+                            self.pixel_coord = {}
+                            # self.world_coord = []
+                            # self.world_coord_ID = []
 
-                        self.move_next_frame(0)
-                        self.is_editing = False
-                        break
+                            self.move_next_frame(0)
+                            self.is_editing = False
+                            break
+                    except:
+                        print("error")
 
+                        # np.save("h_mat.npy", self.h_mat)
+                        pass
             if not self.cap.isOpened():
                 self.save_results(is_finished=self.is_finished)
                 cv2.destroyAllWindows()
                 self.cap.release()
-            # except:
-            #    self.save_results(is_finished=False)
-            #    print("ERROR!")nnn
 
     def draw_pitch(self, img, width, height):
         color = (0, 0, 255)
@@ -444,7 +455,7 @@ class TransformCalculator:
             "305": [self.width / 2, self.height / 2 + 9.15],
 
             "401": [self.width - 16.5, self.height / 2 - 20.15],
-            "402": [self.width, self.height / 2 - 9.15],
+            "402": [self.width, self.height / 2 - 20.15],
             "403": [self.width - 16.5, self.height / 2 - 7.01],
             "404": [self.width - 5.5, self.height / 2 - 9.15],
             "405": [self.width, self.height / 2 - 9.15],
@@ -503,11 +514,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--input', type=str,
-                        default='my_video.mp4', help='intput video file')
+                        default='Fitogether_BCAST Test Footage.mp4', help='intput video file')
     parser.add_argument('--start', type=int,
                         default=0, help='start frame index')
     parser.add_argument('--end', type=int,
-                        default=1000, help='end frame index')
+                        default=9999, help='end frame index')
     parser.add_argument('--width', type=int,
                         default=105, help='stadium width')
     parser.add_argument('--height', type=int,
